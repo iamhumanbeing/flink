@@ -127,17 +127,6 @@ public class ClientTest extends TestLogger {
 	@Test
 	public void testDetachedMode() throws Exception{
 		final ClusterClient<?> clusterClient = new MiniClusterClient(new Configuration(), MINI_CLUSTER_RESOURCE.getMiniCluster());
-		try {
-			PackagedProgram prg = PackagedProgram.newBuilder().setEntryPointClassName(TestExecuteTwice.class.getName()).build();
-			final Configuration configuration = fromPackagedProgram(prg, 1, true);
-
-			ClientUtils.executeProgram(new TestExecutorServiceLoader(clusterClient, plan), configuration, prg);
-			fail(FAIL_MESSAGE);
-		} catch (ProgramInvocationException e) {
-			assertEquals(
-					DetachedJobExecutionResult.DETACHED_MESSAGE + DetachedJobExecutionResult.EXECUTE_TWICE_MESSAGE,
-					e.getCause().getMessage());
-		}
 
 		try {
 			PackagedProgram prg = PackagedProgram.newBuilder().setEntryPointClassName(TestEager.class.getName()).build();
@@ -295,19 +284,6 @@ public class ClientTest extends TestLogger {
 	}
 
 	/**
-	 * Test job that calls {@link ExecutionEnvironment#execute()} twice.
-	 */
-	public static final class TestExecuteTwice {
-
-		public static void main(String[] args) throws Exception {
-			final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
-			env.fromElements(1, 2).output(new DiscardingOutputFormat<Integer>());
-			env.execute();
-			env.fromElements(1, 2).collect();
-		}
-	}
-
-	/**
 	 * Test job that uses an eager sink.
 	 */
 	public static final class TestEager {
@@ -396,7 +372,7 @@ public class ClientTest extends TestLogger {
 						jobGraph.setClasspaths(accessor.getClasspaths());
 
 						final JobID jobID = ClientUtils.submitJob(clusterClient, jobGraph).getJobID();
-						return CompletableFuture.completedFuture(new ClusterClientJobClientAdapter<>(clusterClient, jobID));
+						return CompletableFuture.completedFuture(new ClusterClientJobClientAdapter<>(() -> clusterClient, jobID));
 					};
 				}
 			};

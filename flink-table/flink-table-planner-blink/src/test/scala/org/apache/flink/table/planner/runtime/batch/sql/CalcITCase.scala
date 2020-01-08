@@ -45,7 +45,7 @@ import org.junit.Assert.assertEquals
 import org.junit._
 import java.nio.charset.StandardCharsets
 import java.sql.{Date, Time, Timestamp}
-import java.time.{LocalDate, LocalDateTime}
+import java.time.{LocalDate, LocalDateTime, ZoneId}
 import java.util
 
 import scala.collection.Seq
@@ -306,6 +306,14 @@ class CalcITCase extends BatchTestBase {
   }
 
   @Test
+  def testDecimalReturnType(): Unit = {
+    registerFunction("myNegative", MyNegative)
+    checkResult("SELECT myNegative(5.1)",
+      Seq(row(new java.math.BigDecimal("-5.100000000000000000"))
+      ))
+  }
+
+  @Test
   def testUDFWithInternalClass(): Unit = {
     registerFunction("func", BinaryStringFunction)
     val data = Seq(row("a"), row("b"), row("c"))
@@ -315,6 +323,28 @@ class CalcITCase extends BatchTestBase {
       "SELECT func(text) FROM MyTable",
       Seq(row("a"), row("b"), row("c")
       ))
+  }
+
+  @Test
+  def testTimestampSemantics(): Unit = {
+    // If the timestamp literal '1969-07-20 16:17:39' is inserted in Washington D.C.
+    // and then queried from Paris, it might be shown in the following ways based
+    // on timestamp semantics:
+    // TODO: Add ZonedDateTime/OffsetDateTime
+    val new_york = ZoneId.of("America/New_York")
+    val ldt = localDateTime("1969-07-20 16:17:39")
+    val data = Seq(row(
+      ldt,
+      ldt.toInstant(new_york.getRules.getOffset(ldt))
+    ))
+    registerCollection("T", data, new RowTypeInfo(LOCAL_DATE_TIME, INSTANT), "a, b")
+
+    val pairs = ZoneId.of("Europe/Paris")
+    tEnv.getConfig.setLocalTimeZone(pairs)
+    checkResult(
+      "SELECT CAST(a AS VARCHAR), b, CAST(b AS VARCHAR) FROM T",
+      Seq(row("1969-07-20 16:17:39", "1969-07-20T20:17:39Z", "1969-07-20 21:17:39"))
+    )
   }
 
   @Test
